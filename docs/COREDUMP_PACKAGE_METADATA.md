@@ -1,4 +1,4 @@
 ---
 layout: forward
-target: ELF_PACKAGE_METADATA
+target: /ELF_PACKAGE_METADATA
 ---
