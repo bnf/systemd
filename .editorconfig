@@ -40,3 +40,6 @@ indent_size = 2
 [docs/**/*.html]
 indent_style = space
 indent_size = 2
+
+[src/journal-remote/**.html]
+indent_size = 8
