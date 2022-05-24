@@ -79,3 +79,5 @@ Packages=
         dnsmasq-base
         wireguard-tools
         isc-dhcp-server
+        # Required for systemd-journal-gatewayd
+        libmicrohttpd

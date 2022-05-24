@@ -84,3 +84,5 @@ Packages=
         wireguard-tools
         dhcp-server
         kernel-modules-extra
+        # Required for systemd-journal-gatewayd
+        libmicrohttpd

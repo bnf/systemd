@@ -73,3 +73,5 @@ Packages=
         nano
         strace
         util-linux
+        # Required for systemd-journal-gatewayd
+        libmicrohttpd
