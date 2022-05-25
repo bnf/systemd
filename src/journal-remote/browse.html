@@ -104,27 +104,36 @@
                 }
         </style>
         <script type="module">
-                function renderTemplate(element, data) {
-                        const shadow = element.attachShadow({ mode: "open" });
-                        const template = element.querySelector('template');
-                        if (!template) {
-                                shadow.textContent = 'Error: missing <template> tag';
-                                return;
-                        }
-                        const variables = template.content.querySelectorAll('[data-var]');
-                        variables.forEach((el) => {
-                                const prop = el.dataset.var;
-                                const value = data[prop] || '';
-                                el.textContent = value;
-                        });
-                        const content = document.importNode(template.content, true);
-                        shadow.appendChild(content);
-                }
-                class MachineInfoElement extends HTMLElement {
-                        connectedCallback() {
-                                this.render();
+
+                class SdElement extends HTMLElement {
+                        async connectedCallback() {
+                                let data = this.render();
+                                if (data instanceof Promise) {
+                                        data = await data;
+                                }
+
+                                this.renderTemplate(this, data);
                         }
 
+                        renderTemplate(element, data) {
+                                const shadow = element.attachShadow({ mode: "open" });
+                                const template = element.querySelector('template');
+                                if (!template) {
+                                        shadow.textContent = 'Error: missing <template> tag';
+                                        return;
+                                }
+                                const variables = template.content.querySelectorAll('[data-var]');
+                                variables.forEach((el) => {
+                                        const prop = el.dataset.var;
+                                        const value = data[prop] || '';
+                                        el.textContent = value;
+                                });
+                                const content = document.importNode(template.content, true);
+                                shadow.appendChild(content);
+                        }
+                }
+
+                class MachineInfoElement extends SdElement {
                         async render() {
                                 let d;
                                 try {
@@ -138,7 +147,7 @@
                                 document.title = 'Journal of ' + d.hostname;
                                 const from = new Date(parseInt(d.cutoff_from_realtime) / 1000);
                                 const to = new Date(parseInt(d.cutoff_to_realtime) / 1000);
-                                renderTemplate(this, {
+                                return {
                                         hostname: d.hostname,
                                         os_pretty_name: d.os_pretty_name,
                                         virtualization_prefix: 'Running on ' + (d.virtualization !== 'bare' ? 'virtualization ' : ''),
@@ -148,7 +157,7 @@
                                         machine_id: d.machine_id,
                                         boot_id: d.boot_id,
                                         usage: formatBytes(parseInt(d.usage))
-                                });
+                                };
                         }
                 }
                 window.customElements.define('sd-machine-info', MachineInfoElement);
