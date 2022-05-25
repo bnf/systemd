@@ -102,8 +102,30 @@
                 select {
                         width: 50em;
                 }
+                sd-log-entry {
+                        display: block;
+                        height: 12px;
+                        width: 100%;
+                        contain: strict;
+                        content-visibility: auto;
+                        contain-intrinsic-size: 0 11px;
+                }
+
         </style>
         <script type="module">
+
+                function formatBytes(u) {
+                        if (u >= 1024*1024*1024*1024)
+                                return (u/1024/1024/1024/1024).toFixed(1) + " TiB";
+                        else if (u >= 1024*1024*1024)
+                                return (u/1024/1024/1024).toFixed(1) + " GiB";
+                        else if (u >= 1024*1024)
+                                return (u/1024/1024).toFixed(1) + " MiB";
+                        else if (u >= 1024)
+                                return (u/1024).toFixed(1) + " KiB";
+                        else
+                                return u.toString() + " B";
+                }
 
                 class SdElement extends HTMLElement {
                         async connectedCallback() {
@@ -115,29 +137,38 @@
                                 this.renderTemplate(this, data);
                         }
 
+                        getTemplate(element) {
+                                return element.querySelector('template');
+                        }
+
                         renderTemplate(element, data) {
                                 const shadow = element.attachShadow({ mode: "open" });
-                                const template = element.querySelector('template');
+                                const template = this.getTemplate(element);
                                 if (!template) {
                                         shadow.textContent = 'Error: missing <template> tag';
                                         return;
                                 }
                                 const variables = template.content.querySelectorAll('[data-var]');
-                                variables.forEach((el) => {
-                                        const prop = el.dataset.var;
-                                        const value = data[prop] || '';
-                                        el.textContent = value;
+                                variables.forEach((node) => {
+                                        node.dataset.var.split(',').forEach((variable) => {
+                                                const target = variable.split(':');
+                                                if (target.length > 1) {
+                                                        node.setAttribute(target[0], data[target[1]] || '');
+                                                } else {
+                                                        node.textContent = data[target[0]] || '';
+                                                }
+                                        });
                                 });
                                 const content = document.importNode(template.content, true);
                                 shadow.appendChild(content);
                         }
                 }
 
-                class MachineInfoElement extends SdElement {
+                class SdMachineInfoElement extends SdElement {
                         async render() {
                                 let d;
                                 try {
-                                        const response = await fetch('/machine', { headers: { 'Accept': 'application/json' } });
+                                        const response = await fetch(this.getAttribute('endpoint'), { headers: { 'Accept': 'application/json' } });
                                         d = await response.json();
                                 } catch (e) {
                                         this.textContent = 'Failed to acquire machine data';
@@ -160,7 +191,86 @@
                                 };
                         }
                 }
-                window.customElements.define('sd-machine-info', MachineInfoElement);
+                window.customElements.define('sd-machine-info', SdMachineInfoElement);
+
+                class SdLogEntry extends SdElement {
+                        constructor() {
+                                super();
+                                this.data = null;
+                        }
+
+                        getData() {
+                                return this.data ?? this.parseData();
+                                if (this.data !== null) {
+                                        return this.data;
+                                }
+                        }
+
+                        parseData() {
+                                this.data = JSON.parse(this.getAttribute('entry'));
+                                return this.data;
+                        }
+
+                        getTemplate(element) {
+                                return document.getElementById('log-entry-template');
+                        }
+
+                        async render() {
+                                const d = this.getData();
+                                if (d === null || d.MESSAGE == undefined || d.__CURSOR == undefined) {
+                                        return {}
+                                }
+
+                                let process = d.SYSLOG_IDENTIFIER ?? d._COMM ?? '';
+                                if (d._PID != undefined)
+                                        process += "[" + d._PID + "]";
+                                else if (d.SYSLOG_PID != undefined)
+                                        process += "[" + d.SYSLOG_PID + "]";
+
+
+                                let priority;
+                                if (d.PRIORITY != undefined)
+                                        priority = parseInt(d.PRIORITY);
+                                else
+                                        priority = 6;
+
+                                let severity;
+                                if (priority <= 3)
+                                        severity = "message-error";
+                                else if (priority <= 5)
+                                        severity = "message-highlight";
+                                else
+                                        severity = "message";
+
+                                let message;
+                                if (d.MESSAGE == null)
+                                        message = "[blob data]";
+                                else if (d.MESSAGE instanceof Array)
+                                        message = "[" + formatBytes(d.MESSAGE.length) + " blob data]";
+                                else
+                                        message = d.MESSAGE;
+
+                                const timestamp = (d.__REALTIME_TIMESTAMP != undefined) ?
+                                        (new Date(parseInt(d.__REALTIME_TIMESTAMP) / 1000)).toLocaleString() :
+                                        null;
+
+                                return {
+                                        timestamp,
+                                        process,
+                                        message,
+                                        severity,
+                                        cursor: d.__CURSOR,
+                                };
+                        }
+                }
+                window.customElements.define('sd-log-entry', SdLogEntry);
+
+                document.addEventListener('click', (e) => {
+                        console.log('click', e, e.target, e.currentTarget, e.path[0]);
+                        if (e.path.length > 0 && e.path[0].hasAttribute('data-cursor')) {
+                                window.onMessageClick(e.path[0].getAttribute('data-cursor'))
+                        }
+                });
         </script>
 </head>
 
@@ -169,7 +279,7 @@
                 - live display
                 - show red lines for reboots -->
 
-        <sd-machine-info>
+        <sd-machine-info endpoint="./machine">
                 <template>
                         <h1 id="title">Journal of <span data-var="hostname"></span></h1>
 
@@ -191,6 +301,12 @@
                 </template>
         </sd-machine-info>
 
+        <template id="log-entry-template">
+                <span data-var="timestamp"></span>
+                <span data-var="process"></span>
+                <a href="#entry" data-var="message,data-cursor:cursor,class:severity"></a>
+        </template>
+
         <div id="showing"></div>
 
         <div id="filternav">
@@ -201,7 +317,7 @@
                 <label><input id="boot" type="checkbox" onchange="onBootChange(this);">Only current boot</label>
         </div>
 
-        <div id="divlogs"><table id="tablelogs"></table></div>
+        <div id="divlogs"></div>
         <a name="entry"></a>
         <div id="diventry"><table id="tableentry"></table></div>
 
@@ -269,7 +385,7 @@
                 }
 
                 function escapeHTML(s) {
-                        return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                        return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
                 }
 
                 function entriesLoad(range) {
@@ -329,7 +445,7 @@
                                 (event.currentTarget.status != 200 && event.currentTarget.status != 0))
                                 return;
 
-                        var logs = document.getElementById("tablelogs");
+                        var logs = document.getElementById("divlogs");
 
                         var lc = null;
                         var fc = null;
@@ -347,6 +463,8 @@
                                 if (l[i] == '')
                                         continue;
 
+                                buf += '<sd-log-entry entry="' + escapeHTML(l[i]) + '"></sd-log-entry>';
+
                                 var d = JSON.parse(l[i]);
                                 if (d.MESSAGE == undefined || d.__CURSOR == undefined)
                                         continue;
@@ -355,52 +473,9 @@
                                         fc = d.__CURSOR;
                                 lc = d.__CURSOR;
 
-                                var priority;
-                                if (d.PRIORITY != undefined)
-                                        priority = parseInt(d.PRIORITY);
-                                else
-                                        priority = 6;
-
-                                var clazz;
-                                if (priority <= 3)
-                                        clazz = "message-error";
-                                else if (priority <= 5)
-                                        clazz = "message-highlight";
-                                else
-                                        clazz = "message";
-
-                                buf += '<tr><td class="timestamp">';
-
-                                if (d.__REALTIME_TIMESTAMP != undefined) {
-                                        var timestamp = new Date(parseInt(d.__REALTIME_TIMESTAMP) / 1000);
-                                        buf += timestamp.toLocaleString();
-                                }
-
-                                buf += '</td><td class="process">';
-
-                                if (d.SYSLOG_IDENTIFIER != undefined)
-                                        buf += escapeHTML(d.SYSLOG_IDENTIFIER);
-                                else if (d._COMM != undefined)
-                                        buf += escapeHTML(d._COMM);
-
-                                if (d._PID != undefined)
-                                        buf += "[" + escapeHTML(d._PID) + "]";
-                                else if (d.SYSLOG_PID != undefined)
-                                        buf += "[" + escapeHTML(d.SYSLOG_PID) + "]";
-
-                                buf += '</td><td class="' + clazz + '"><a href="#entry" onclick="onMessageClick(\'' + d.__CURSOR + '\');">';
-
-                                if (d.MESSAGE == null)
-                                        buf += "[blob data]";
-                                else if (d.MESSAGE instanceof Array)
-                                        buf += "[" + formatBytes(d.MESSAGE.length) + " blob data]";
-                                else
-                                        buf += escapeHTML(d.MESSAGE);
-
-                                buf += '</a></td></tr>';
                         }
 
-                        logs.innerHTML = '<tbody>' + buf + '</tbody>';
+                        logs.innerHTML = buf;
 
                         if (fc != null) {
                                 first_cursor = fc;
