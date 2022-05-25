@@ -207,15 +207,24 @@
                         }
 
                         parseData() {
-                                this.data = JSON.parse(this.getAttribute('entry'));
+                                try {
+                                        this.data = JSON.parse(this.getAttribute('entry'));
+                                } catch (e) {
+                                        console.log('Failed to parse', this.getAttribute('entry'), this);
+                                        return null;
+                                }
                                 return this.data;
+                        }
+
+                        getCursor() {
+                                return this.getData().__CURSOR ?? null;
                         }
 
                         getTemplate(element) {
                                 return document.getElementById('log-entry-template');
                         }
 
-                        async render() {
+                        render() {
                                 const d = this.getData();
                                 if (d === null || d.MESSAGE == undefined || d.__CURSOR == undefined) {
                                         return {}
@@ -341,8 +350,15 @@
         </div>
 
         <script type="text/javascript">
-                var first_cursor = null;
-                var last_cursor = null;
+                const logs = document.getElementById("divlogs");
+
+                function getFirstCursor() {
+                        return logs.firstChild?.getCursor();
+                }
+
+                function getLastCursor() {
+                        return logs.lastChild?.getCursor();
+                }
 
                 function getNEntries() {
                         var n;
@@ -388,7 +404,7 @@
                         return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
                 }
 
-                function entriesLoad(range) {
+                async function entriesLoad(range, reset = false) {
 
                         if (range == null) {
                                 if (localStorage["cursor"] != null && localStorage["cursor"] != "")
@@ -397,7 +413,7 @@
                                         range = "";
                         }
 
-                        var url = "entries";
+                        var url = "./entries";
 
                         if (localStorage["filter"] != "" && localStorage["filter"] != null) {
                                 url += "?_SYSTEMD_UNIT=" + escape(localStorage["filter"]);
@@ -409,108 +425,124 @@
                                         url += "?boot";
                         }
 
+
+                        const response = await fetch(url, {
+                                headers: {
+                                        "Accept": "application/json-seq",
+                                        "Range": "entries=" + range + ":" + getNEntries().toString()
+                                }
+                        });
+                        entriesOnResult(response, reset);
+                                        /*
                         var request = new XMLHttpRequest();
                         request.open("GET", url);
                         request.onreadystatechange = entriesOnResult;
                         request.setRequestHeader("Accept", "application/json");
                         request.setRequestHeader("Range", "entries=" + range + ":" + getNEntries().toString());
                         request.send(null);
+                                        */
                 }
 
                 function entriesLoadNext() {
+                        const last_cursor = getLastCursor();
                         if (last_cursor == null)
-                                entriesLoad("");
+                                entriesLoad("", true);
                         else
                                 entriesLoad(last_cursor + ":1");
                 }
 
                 function entriesLoadPrevious() {
+                        const first_cursor = getFirstCursor();
                         if (first_cursor == null)
-                                entriesLoad("");
+                                entriesLoad("", true);
                         else
                                 entriesLoad(first_cursor + ":-" + getNEntries().toString());
                 }
 
                 function entriesLoadHead() {
-                        entriesLoad("");
+                        entriesLoad("", true);
                 }
 
                 function entriesLoadTail() {
-                        entriesLoad(":-" + getNEntries().toString());
+                        entriesLoad(":-" + getNEntries().toString(), true);
                 }
 
-                function entriesOnResult(event) {
+                function decodeuint8arr(uint8array){
+                        return new TextDecoder("utf-8").decode(uint8array);
+                }
 
-                        if ((event.currentTarget.readyState != 4) ||
-                                (event.currentTarget.status != 200 && event.currentTarget.status != 0))
+                /**
+                 * delimiter = 0x1e for application/json-seq
+                 * delimiter = 0x0a for application/x-ndjson
+                 */
+                async function splitStream(stream, callback, delimiter = 0x0a) {
+                        let tail = '';
+                        let count = 0;
+                        do {
+                                const {done, value} = await stream.read();
+                                if (done) {
+                                        break;
+                                }
+                                let start = 0;
+                                for (let next = 0; (next = value.indexOf(delimiter, start)) !== -1; start = next + 1) {
+                                        const data = tail + decodeuint8arr(value.slice(start, next));
+                                        if (data !== '') {
+                                                callback(data);
+                                                ++count;
+                                                tail = '';
+                                        }
+                                }
+                                tail = value.length === start ? '' : decodeuint8arr(value.slice(start));
+                        } while (true);
+
+                        if (tail !== '') {
+                                callback(tail);
+                                ++count;
+                        }
+                        return count;
+                }
+
+                async function entriesOnResult(response, reset) {
+
+                        if (!response.ok) {
                                 return;
+                        }
 
-                        var logs = document.getElementById("divlogs");
+                        //var logs = document.getElementById("divlogs");
 
                         var lc = null;
                         var fc = null;
 
-                        var i, l = event.currentTarget.responseText.split('\n');
-
-                        if (l.length <= 1) {
-                                logs.innerHTML = '<tbody><tr><td colspan="3"><i>No further entries...</i></td></tr></tbody>';
-                                return;
+                        if (reset) {
+                                // Remove all children
+                                logs.replaceChildren();
                         }
 
-                        const text = event.currentTarget.responseText;
-                        let start = 0, next = 0;
-                        do {
-                                next = text.indexOf('\n', start);
-
-                                const json = next === -1 ? text.slice(start) : text.slice(start, next);
-
-                                if (json !== '') {
-                                        const entry = document.createElement('sd-log-entry');
-                                        entry.setAttribute('entry', json);
-                                        logs.appendChild(entry);
-                                }
-
-                                if (next !== -1) {
-                                        start = next + 1;
-                                }
-                        } while (next !== -1);
-
-
-                        /*
-                        for (i in l) {
-                                if (l[i] == '')
-                                        continue;
-
-                                                /*
+                        const count = await splitStream(response.body.getReader(), (json) => {
                                 const entry = document.createElement('sd-log-entry');
-                                entry.setAttribute('entry', l[i]);
+                                entry.setAttribute('entry', json);
                                 logs.appendChild(entry);
+                        }, 0x1e);
+                        // @todo: readd support for localStorage["cursor"] = fc;
+                        // @todo: although not sure I like that
 
-                                var d = JSON.parse(l[i]);
-                                if (d.MESSAGE == undefined || d.__CURSOR == undefined)
-                                        continue;
-
-                                if (fc == null)
-                                        fc = d.__CURSOR;
-                                lc = d.__CURSOR;
-
+                        if (count === 0) {
+                                const info = document.createElement('em');
+                                info.textContent = 'No further entries…';
+                                const div = document.createElement('div');
+                                div.appendChild(info);
+                                logs.appendChild(div);
                         }
-                        */
-
-                        if (fc != null) {
-                                first_cursor = fc;
-                                localStorage["cursor"] = fc;
-                        }
-                        if (lc != null)
-                                last_cursor = lc;
                 }
 
                 function entriesMore() {
+                        const first_cursor = getFirstCursor();
                         setNEntries(getNEntries() + 10);
                         entriesLoad(first_cursor);
                 }
 
                 function entriesLess() {
+                        const first_cursor = getFirstCursor();
                         setNEntries(getNEntries() - 10);
                         entriesLoad(first_cursor);
                 }
