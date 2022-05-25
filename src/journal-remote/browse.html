@@ -457,13 +457,13 @@
                                 return;
                         }
 
-                        var buf = '';
-
                         for (i in l) {
                                 if (l[i] == '')
                                         continue;
 
-                                buf += '<sd-log-entry entry="' + escapeHTML(l[i]) + '"></sd-log-entry>';
+                                const entry = document.createElement('sd-log-entry');
+                                entry.setAttribute('entry', l[i]);
+                                logs.appendChild(entry);
 
                                 var d = JSON.parse(l[i]);
                                 if (d.MESSAGE == undefined || d.__CURSOR == undefined)
@@ -474,8 +474,6 @@
                                 lc = d.__CURSOR;
 
                         }
-
-                        logs.innerHTML = buf;
 
                         if (fc != null) {
                                 first_cursor = fc;
