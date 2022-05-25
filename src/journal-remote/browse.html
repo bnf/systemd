@@ -457,10 +457,31 @@
                                 return;
                         }
 
+                        const text = event.currentTarget.responseText;
+                        let start = 0, next = 0;
+                        do {
+                                next = text.indexOf('\n', start);
+
+                                const json = next === -1 ? text.slice(start) : text.slice(start, next);
+
+                                if (json !== '') {
+                                        const entry = document.createElement('sd-log-entry');
+                                        entry.setAttribute('entry', json);
+                                        logs.appendChild(entry);
+                                }
+
+                                if (next !== -1) {
+                                        start = next + 1;
+                                }
+                        } while (next !== -1);
+
+
+                        /*
                         for (i in l) {
                                 if (l[i] == '')
                                         continue;
 
+                                                /*
                                 const entry = document.createElement('sd-log-entry');
                                 entry.setAttribute('entry', l[i]);
                                 logs.appendChild(entry);
@@ -474,6 +495,7 @@
                                 lc = d.__CURSOR;
 
                         }
+                        */
 
                         if (fc != null) {
                                 first_cursor = fc;
