@@ -14,7 +14,7 @@
                         border-radius: 10px 10px 10px 10px;
                         border: 1px solid threedshadow;
                         white-space: nowrap;
-                        overflow-x: auto;
+                        overflow: auto;
                 }
                 div#diventry {
                         display: none;
@@ -26,45 +26,11 @@
                         background-color: #ededed;
                         color: #313739;
                         font: message-box;
-                        margin: 3em;
-                }
-                td.timestamp {
-                        text-align: right;
-                        border-right: 1px dotted lightgrey;
-                        padding-right: 5px;
-                }
-                td.process {
-                        border-right: 1px dotted lightgrey;
-                        padding-left: 5px;
-                        padding-right: 5px;
-                }
-                td.message {
-                        padding-left: 5px;
-                }
-                td.message > a:link, td.message > a:visited {
-                        text-decoration: none;
-                        color: #313739;
-                }
-                td.message-error {
-                        padding-left: 5px;
-                        color: red;
-                        font-weight: bold;
-                }
-                td.message-error > a:link, td.message-error > a:visited {
-                        text-decoration: none;
-                        color: red;
-                }
-                td.message-highlight {
-                        padding-left: 5px;
-                        font-weight: bold;
-                }
-                td.message-highlight > a:link, td.message-highlight > a:visited {
-                        text-decoration: none;
-                        color: #313739;
-                }
-                td > a:hover, td > a:active {
-                        text-decoration: underline;
-                        color: #c13739;
+                        margin: 0;
+                        padding: 3em;
+                        display: flex;
+                        flex-direction: column;
+                        min-height: 100%;
                 }
                 table#tablelogs, table#tableentry {
                         border-collapse: collapse;
@@ -102,14 +68,6 @@
                 select {
                         width: 50em;
                 }
-                sd-log-entry {
-                        display: block;
-                        height: 12px;
-                        width: 100%;
-                        contain: strict;
-                        content-visibility: auto;
-                        contain-intrinsic-size: 0 11px;
-                }
 
         </style>
         <script type="module">
@@ -127,40 +85,102 @@
                                 return u.toString() + " B";
                 }
 
-                class SdElement extends HTMLElement {
-                        async connectedCallback() {
-                                let data = this.render();
-                                if (data instanceof Promise) {
-                                        data = await data;
-                                }
+                function formatTimestamp(ts) {
+                        return ts ? new Date(parseInt(ts) / 1000).toLocaleString() : null;
+                }
 
-                                this.renderTemplate(this, data);
+                class SdElement extends HTMLElement {
+                        constructor() {
+                                super();
+                                this.legacyStyles = [];
+                                this.applyStyles();
                         }
 
-                        getTemplate(element) {
-                                return element.querySelector('template');
+                        async connectedCallback() {
+                                let props = this.render();
+                                if (props instanceof Promise) {
+                                        this.renderTemplate(this, {});
+                                        props = await props;
+                                }
+
+                                this.renderTemplate(this, props);
+                        }
+
+                        static get css() {
+                                return null;
+                        }
+
+                        get template() {
+                                return this.querySelector('template');
+                        }
+
+                        get shadow() {
+                                return this.shadowRoot ?? this.attachShadow({ mode: 'open' });
+                        }
+
+                        applyStyles() {
+                                if (typeof this.constructor._stylesheet !== 'undefined') {
+                                        this.shadow.adoptedStyleSheets = [this.constructor.stylesheet];
+                                        return;
+                                }
+
+                                if (typeof this.constructor._legacyStylesheet !== 'undefined') {
+                                        const style = this.constructor._legacyStylesheet.cloneNode(true);
+                                        this.shadow.appendChild(style);
+                                        this.legacyStyles = [style];
+                                        return;
+                                }
+
+                                const css = this.constructor.css;
+                                if (css == null)
+                                        return;
+
+                                try {
+                                        const stylesheet = new CSSStyleSheet();
+                                        stylesheet.replaceSync(css);
+                                        this.constructor.stylesheet = stylesheet;
+                                        this.shadow.adoptedStyleSheets = [stylesheet];
+                                } catch (e) {
+                                        const legacyStylesheet = document.createElement('style');
+                                        legacyStylesheet.appendChild(document.createTextNode(css));
+                                        this.constructor._legacyStylesheet = legacyStylesheet;
+                                        const style = this.constructor._legacyStylesheet.cloneNode(true);
+                                        this.shadow.appendChild(style);
+                                        this.legacyStyles = [style];
+                                }
                         }
 
                         renderTemplate(element, data) {
-                                const shadow = element.attachShadow({ mode: "open" });
-                                const template = this.getTemplate(element);
+                                const template = this.template;
                                 if (!template) {
-                                        shadow.textContent = 'Error: missing <template> tag';
+                                        this.shadow.textContent = 'Error: missing <template> tag';
                                         return;
                                 }
-                                const variables = template.content.querySelectorAll('[data-var]');
-                                variables.forEach((node) => {
-                                        node.dataset.var.split(',').forEach((variable) => {
-                                                const target = variable.split(':');
-                                                if (target.length > 1) {
-                                                        node.setAttribute(target[0], data[target[1]] || '');
-                                                } else {
-                                                        node.textContent = data[target[0]] || '';
-                                                }
-                                        });
-                                });
                                 const content = document.importNode(template.content, true);
-                                shadow.appendChild(content);
+                                content.querySelectorAll('*').forEach((node) => {
+                                        for (let property in node.dataset) {
+                                                const target = node.dataset[property];
+                                                delete node.dataset[property];
+                                                if (!(property in data))
+                                                        continue;
+                                                if (target === '')
+                                                        node.textContent = data[property];
+                                                else
+                                                        node.setAttribute(target, data[property]);
+                                        }
+                                });
+                                this.shadow.replaceChildren(content, ...this.legacyStyles);
+                        }
+
+                        parseJsonAttribute(attribute, property) {
+                                const value = this.getAttribute(attribute);
+                                try {
+                                        this[property] = JSON.parse(value);
+                                } catch (e) {
+                                        console.error(`Failed to parse attribute '${attribute}' as JSON: ${value}`);
+                                        return null;
+                                }
+                                return this[property];
                         }
                 }
 
@@ -168,7 +188,14 @@
                         async render() {
                                 let d;
                                 try {
-                                        const response = await fetch(this.getAttribute('endpoint'), { headers: { 'Accept': 'application/json' } });
+                                        const response = await fetch(
+                                                this.getAttribute('endpoint'),
+                                                {
+                                                        headers: {
+                                                                'Accept': 'application/json'
+                                                        }
+                                                }
+                                        );
                                         d = await response.json();
                                 } catch (e) {
                                         this.textContent = 'Failed to acquire machine data';
@@ -176,17 +203,15 @@
                                 }
 
                                 document.title = 'Journal of ' + d.hostname;
-                                const from = new Date(parseInt(d.cutoff_from_realtime) / 1000);
-                                const to = new Date(parseInt(d.cutoff_to_realtime) / 1000);
                                 return {
                                         hostname: d.hostname,
-                                        os_pretty_name: d.os_pretty_name,
-                                        virtualization_prefix: 'Running on ' + (d.virtualization !== 'bare' ? 'virtualization ' : ''),
+                                        osPrettyName: d.os_pretty_name,
+                                        virtualizationPrefix: 'Running on ' + (d.virtualization !== 'bare' ? 'virtualization ' : ''),
                                         virtualization: d.virtualization === 'bare' ? 'bare metal' : d.virtualization,
-                                        from: from.toLocaleString(),
-                                        to: to.toLocaleString(),
-                                        machine_id: d.machine_id,
-                                        boot_id: d.boot_id,
+                                        from: formatTimestamp(d.cutoff_from_realtime),
+                                        to: formatTimestamp(d.cutoff_to_realtime),
+                                        machineId: d.machine_id,
+                                        bootId: d.boot_id,
                                         usage: formatBytes(parseInt(d.usage))
                                 };
                         }
@@ -194,55 +219,100 @@
                 window.customElements.define('sd-machine-info', SdMachineInfoElement);
 
                 class SdLogEntry extends SdElement {
-                        constructor() {
-                                super();
-                                this.data = null;
+                        static get css() {
+                                return `
+                                        :host {
+                                                display: block;
+                                                line-height: 1.25em;
+                                                height: 1.25em;
+                                                contain-intrinsic-size: 0 1.25em;
+                                                width: 100%;
+                                                contain: strict;
+                                                content-visibility: auto;
+                                                flex: 0 0 auto;
+                                        }
+
+                                        time {
+                                                vertical-align: top;
+                                                display: inline-block;
+                                                min-width: 20ch;
+                                                text-align: right;
+                                                padding-right: 1ch;
+                                                border-right: 1px dotted lightgrey;
+                                        }
+
+                                        .process {
+                                                vertical-align: top;
+                                                display: inline-block;
+                                                width: 20ch;
+                                                white-space: nowrap;
+                                                overflow: hidden;
+                                                text-overflow: ellipsis;
+                                                border-right: 1px dotted lightgrey;
+                                                padding-left: 5px;
+                                                padding-right: 5px;
+                                        }
+
+                                        a {
+                                                display: inline-block;
+                                                width: calc(100% - 42ch);
+                                                vertical-align: top;
+                                                overflow: hidden;
+                                                text-overflow: ellipsis;
+                                                padding-left: 5px;
+                                        }
+                                        a:link, a:visited {
+                                                text-decoration: none;
+                                                color: #313739;
+                                        }
+                                        .message-error {
+                                                padding-left: 5px;
+                                                color: red;
+                                                font-weight: bold;
+                                        }
+                                        .message-error:link, .message-errora:visited {
+                                                text-decoration: none;
+                                                color: red;
+                                        }
+                                        .message-highlight {
+                                                padding-left: 5px;
+                                                font-weight: bold;
+                                        }
+                                        .message-highlight:link, .message-highlight:visited {
+                                                text-decoration: none;
+                                                color: #313739;
+                                        }
+                                        a:hover, :active {
+                                                text-decoration: underline;
+                                                color: #c13739;
+                                        }
+                                `;
                         }
 
-                        getData() {
-                                return this.data ?? this.parseData();
-                                if (this.data !== null) {
-                                        return this.data;
-                                }
-                        }
-
-                        parseData() {
-                                try {
-                                        this.data = JSON.parse(this.getAttribute('entry'));
-                                } catch (e) {
-                                        console.log('Failed to parse', this.getAttribute('entry'), this);
-                                        return null;
-                                }
-                                return this.data;
-                        }
-
-                        getCursor() {
-                                return this.getData().__CURSOR ?? null;
-                        }
-
-                        getTemplate(element) {
+                        get template() {
                                 return document.getElementById('log-entry-template');
                         }
 
+                        get data() {
+                                return this._data ?? this.parseJsonAttribute('entry', '_data');
+                        }
+
+                        get cursor() {
+                                return this.data.__CURSOR ?? null;
+                        }
+
                         render() {
-                                const d = this.getData();
+                                const d = this.data;
                                 if (d === null || d.MESSAGE == undefined || d.__CURSOR == undefined) {
                                         return {}
                                 }
 
-                                let process = d.SYSLOG_IDENTIFIER ?? d._COMM ?? '';
-                                if (d._PID != undefined)
-                                        process += "[" + d._PID + "]";
-                                else if (d.SYSLOG_PID != undefined)
-                                        process += "[" + d.SYSLOG_PID + "]";
+                                const cursor = this.cursor;
+                                const timestamp = formatTimestamp(d.__REALTIME_TIMESTAMP ?? null);
+                                const pid = d._PID ?? d.SYSLOG_PID ?? null;
+                                const process = `${d.SYSLOG_IDENTIFIER ?? d._COMM ?? ''}${pid ? `[${pid}]` : ''}`;
 
-
-                                let priority;
-                                if (d.PRIORITY != undefined)
-                                        priority = parseInt(d.PRIORITY);
-                                else
-                                        priority = 6;
-
+                                const priority = parseInt(d.PRIORITY ?? 6);
                                 let severity;
                                 if (priority <= 3)
                                         severity = "message-error";
@@ -252,23 +322,19 @@
                                         severity = "message";
 
                                 let message;
-                                if (d.MESSAGE == null)
+                                if (d.MESSAGE === null)
                                         message = "[blob data]";
                                 else if (d.MESSAGE instanceof Array)
                                         message = "[" + formatBytes(d.MESSAGE.length) + " blob data]";
                                 else
-                                        message = d.MESSAGE;
-
-                                const timestamp = (d.__REALTIME_TIMESTAMP != undefined) ?
-                                        (new Date(parseInt(d.__REALTIME_TIMESTAMP) / 1000)).toLocaleString() :
-                                        null;
+                                        message = d.MESSAGE ?? null;
 
                                 return {
+                                        cursor,
                                         timestamp,
                                         process,
-                                        message,
                                         severity,
-                                        cursor: d.__CURSOR,
+                                        message,
                                 };
                         }
                 }
@@ -290,30 +356,30 @@
 
         <sd-machine-info endpoint="./machine">
                 <template>
-                        <h1 id="title">Journal of <span data-var="hostname"></span></h1>
+                        <h1 id="title">Journal of <span data-hostname>…</span></h1>
 
                         <div id="os">
-                                Operating system is <b data-var="os_pretty_name"></b>.
+                                Operating system is <b data-os-pretty-name>…</b>.
                         </div>
                         <div id="virtualization">
-                                <span data-var="virtualization_prefix"></span><b data-var="virtualization"></b>.
+                                <span data-virtualization-prefix>Running on </span><b data-virtualization>…</b>.
                         </div>
                         <div id="cutoff">
-                                Journal begins at <b data-var="from"></b> and ends at <b data-var="to"></b>.
+                                Journal begins at <b data-from>…</b> and ends at <b data-to>…</b>.
                         </div>
                         <div id="machine">
-                                Machine ID is <b data-var="machine_id"></b>, current boot ID is <b data-var="boot_id"></b>.
+                                Machine ID is <b data-machine-id>…</b>, current boot ID is <b data-boot-id>…</b>.
                         </div>
                         <div id="usage">
-                                Disk usage is <b data-var="usage"></b>.
+                                Disk usage is <b data-usage>…</b>.
                         </div>
                 </template>
         </sd-machine-info>
 
         <template id="log-entry-template">
-                <span data-var="timestamp"></span>
-                <span data-var="process"></span>
-                <a href="#entry" data-var="message,data-cursor:cursor,class:severity"></a>
+                <time data-timestamp></time>
+                <span class="process" data-process="title"><span data-process></span></span>
+                <a href="#entry" data-message data-cursor="data-cursor" data-severity="class"></a>
         </template>
 
         <div id="showing"></div>
@@ -353,11 +419,11 @@
                 const logs = document.getElementById("divlogs");
 
                 function getFirstCursor() {
-                        return logs.firstChild?.getCursor();
+                        return logs.firstChild?.cursor;
                 }
 
                 function getLastCursor() {
-                        return logs.lastChild?.getCursor();
+                        return logs.lastChild?.cursor;
                 }
 
                 function getNEntries() {
@@ -521,17 +587,16 @@
                         const count = await splitStream(response.body.getReader(), (json) => {
                                 const entry = document.createElement('sd-log-entry');
                                 entry.setAttribute('entry', json);
-                                logs.appendChild(entry);
+                                //logs.append(entry);
+                                logs.prepend(entry);
                         }, 0x1e);
                         // @todo: readd support for localStorage["cursor"] = fc;
                         // @todo: although not sure I like that
 
                         if (count === 0) {
-                                const info = document.createElement('em');
-                                info.textContent = 'No further entries…';
                                 const div = document.createElement('div');
-                                div.appendChild(info);
-                                logs.appendChild(div);
+                                div.appendChild(document.createElement('em')).textContent = 'No further entries…';
+                                logs.append(div);
                         }
                 }
 
