@@ -478,7 +478,7 @@
                         var url = "./entries";
 
                         if (localStorage["filter"] != "" && localStorage["filter"] != null) {
-                                url += "?_SYSTEMD_UNIT=" + escape(localStorage["filter"]);
+                                url += "?_SYSTEMD_UNIT=" + encodeURIComponent(localStorage["filter"]);
 
                                 if (localStorage["boot"] == "1")
                                         url += "&boot";
