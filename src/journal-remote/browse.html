@@ -466,10 +466,6 @@
                                 return u.toString() + " B";
                 }
 
-                function escapeHTML(s) {
-                        return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-                }
-
                 async function entriesLoad(range, reset = false) {
 
                         if (range == null) {
