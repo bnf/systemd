@@ -5,6 +5,9 @@
         <title>Journal</title>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
         <style type="text/css">
+                *, *:before, *:after {
+                        box-sizing: border-box;
+                }
                 div#divlogs, div#diventry {
                         font-family: monospace;
                         font-size: 7pt;
@@ -18,9 +21,14 @@
                 }
                 div#diventry {
                         display: none;
+                        flex: 1 0 300px;
                 }
                 div#divlogs {
                         display: block;
+                        flex: 1 0 100px;
+                }
+                html {
+                        height: 100%;
                 }
                 body {
                         background-color: #ededed;
