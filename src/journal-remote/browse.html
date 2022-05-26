@@ -682,6 +682,13 @@
                                 entriesLoadNext();
                 }
 
+                function createOption(value, label) {
+                        const option = document.createElement('option');
+                        option.setAttribute('value', value);
+                        option.textContent = label ?? value;
+                        return option;
+                }
+
                 function onResultFilterFocus(event) {
                         if ((event.currentTarget.readyState != 4) ||
                                 (event.currentTarget.status != 200 && event.currentTarget.status != 0))
@@ -690,8 +697,8 @@
                         var f = document.getElementById("filter");
 
                         var l = event.currentTarget.responseText.split('\n');
-                        var buf = '<option>No filter</option>';
-                        var j = -1;
+                        const options = [createOption('', 'No filter')];
+                        let currentFilterAvailable = false;
 
                         for (i in l) {
 
@@ -702,22 +709,17 @@
                                 if (d._SYSTEMD_UNIT == undefined)
                                       continue;
 
-                                buf += '<option value="' + escape(d._SYSTEMD_UNIT) + '">' + escapeHTML(d._SYSTEMD_UNIT) + '</option>';
+                                options.push(createOption(d._SYSTEMD_UNIT));
 
                                 if (d._SYSTEMD_UNIT == localStorage["filter"])
-                                        j = i;
+                                        currentFilterAvailable = true;
                         }
 
-                        if (j < 0) {
-                                if (localStorage["filter"] != null && localStorage["filter"] != "") {
-                                          buf += '<option value="' + escape(localStorage["filter"]) + '">' + escapeHTML(localStorage["filter"]) + '</option>';
-                                          j = i + 1;
-                                } else
-                                          j = 0;
-                        }
+                        if ((localStorage["filter"] ?? '') && !currentFilterAvailable)
+                                options.push(createOption(localStorage["filter"]));
 
-                        f.innerHTML = buf;
-                        f.selectedIndex = j;
+                        f.replaceChildren(...options);
+                        f.value = localStorage["filter"] ?? '';
                 }
 
                 function onFilterFocus(w) {
@@ -728,12 +730,8 @@
                         request.send(null);
                 }
 
-                function onFilterChange(w) {
-                        if (w.selectedIndex <= 0)
-                                localStorage["filter"] = "";
-                        else
-                                localStorage["filter"] = unescape(w.options[w.selectedIndex].value);
-
+                function onFilterChange(select) {
+                        localStorage["filter"] = select.value;
                         entriesLoadHead();
                 }
 
@@ -745,18 +743,13 @@
                 function initFilter() {
                         var f = document.getElementById("filter");
 
-                        var buf = '<option>No filter</option>';
+                        const options = [createOption('', 'No filter')];
 
-                        var filter = localStorage["filter"];
-                        var j;
-                        if (filter != null && filter != "") {
-                                buf += '<option value="' + escape(filter) + '">' + escapeHTML(filter) + '</option>';
-                                j = 1;
-                        } else
-                                j = 0;
+                        if (localStorage["filter"] ?? '')
+                                options.push(createOption(localStorage["filter"]));
 
-                        f.innerHTML = buf;
-                        f.selectedIndex = j;
+                        f.replaceChildren(...options);
+                        f.value = localStorage["filter"];
                 }
 
                 function installHandlers() {
