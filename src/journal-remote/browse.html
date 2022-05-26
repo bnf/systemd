@@ -483,18 +483,13 @@
                                         range = "";
                         }
 
-                        var url = "./entries";
+                        const url = new URL('./entries', document.baseURI);
 
-                        if (localStorage["filter"] != "" && localStorage["filter"] != null) {
-                                url += "?_SYSTEMD_UNIT=" + encodeURIComponent(localStorage["filter"]);
+                        if (localStorage["filter"] != "" && localStorage["filter"] != null)
+                                url.searchParams.set("_SYSTEMD_UNIT", localStorage["filter"]);
 
-                                if (localStorage["boot"] == "1")
-                                        url += "&boot";
-                        } else {
-                                if (localStorage["boot"] == "1")
-                                        url += "?boot";
-                        }
-
+                        if (localStorage["boot"] == "1")
+                                url.searchParams.set("boot", true);
 
                         const response = await fetch(url, {
                                 headers: {
