@@ -334,10 +334,7 @@ static int request_parse_range(
                         if (r < 0)
                                 return r;
 
-                        if (m->n_entries <= 0)
-                                return -EINVAL;
-
-                        m->n_entries_set = true;
+                        m->n_entries_set = m->n_entries > 0;
                 }
 
                 m->cursor = strndup(range, colon - range);

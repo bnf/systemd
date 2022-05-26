@@ -307,6 +307,10 @@
 
     <para>Listen for core dumps:
     <programlisting>curl 'http://localhost:19531/entries?follow&amp;MESSAGE_ID=fc2e22bc6ee647b6b90729ab34a250b1'</programlisting></para>
+
+    <para>Show the most recent 20 journal events and continuously receive new
+    entries as they are appended to the journal:
+    <programlisting>curl -H 'Range: entries=:-20:0' http://localhost:19531/entries?follow</programlisting></para>
   </refsect1>
 
   <refsect1>
