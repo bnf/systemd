@@ -622,20 +622,24 @@
                         document.getElementById("diventry").style.display = "block";
                         var entry = document.getElementById("tableentry");
 
-                        var buf = "";
-                        for (var key in d) {
-                                var data = d[key];
+                        entry.replaceChildren(...Object.keys(d).map((key) => {
+                                let data = d[key];
 
                                 if (data == null)
                                         data = "[blob data]";
                                 else if (data instanceof Array)
                                         data = "[" + formatBytes(data.length) + " blob data]";
-                                else
-                                        data = escapeHTML(data);
 
-                                buf += '<tr><td class="field">' + key + '</td><td class="data">' + data + '</td></tr>';
-                        }
-                        entry.innerHTML = '<tbody>' + buf + '</tbody>';
+                                const tr = document.createElement('tr'),
+                                        field = document.createElement('td'),
+                                        value = document.createElement('td');
+                                field.classList.add('field');
+                                value.classList.add('data');
+                                field.textContent = key;
+                                value.textContent = data;
+                                tr.append(field, value);
+                                return tr;
+                        }));
                 }
 
                 function onMessageClick(t) {
