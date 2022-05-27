@@ -491,10 +491,20 @@
                         if (localStorage["boot"] == "1")
                                 url.searchParams.set("boot", true);
 
+                        url.searchParams.set("boot", true);
+                        url.searchParams.set("follow", true);
+
+                        const controller = new AbortController();
+                        const { signal } = controller;
+
+                        window.controller = controller;
+                        window.signal = signal;
                         const response = await fetch(url, {
+                                signal,
                                 headers: {
-                                        "Accept": "application/json-seq",
-                                        "Range": "entries=" + range + ":" + getNEntries().toString()
+                                        "Accept": "application/json",
+                                        //"Range": "entries=" + range + ":" + getNEntries().toString()
+                                        "Range": "entries=:-20:0"
                                 }
                         });
                         entriesOnResult(response, reset);
@@ -583,12 +593,17 @@
                                 logs.replaceChildren();
                         }
 
-                        const count = await splitStream(response.body.getReader(), (json) => {
-                                const entry = document.createElement('sd-log-entry');
-                                entry.setAttribute('entry', json);
-                                //logs.append(entry);
-                                logs.prepend(entry);
-                        }, 0x1e);
+                        try {
+                                const count = await splitStream(response.body.getReader(), (json) => {
+                                        const entry = document.createElement('sd-log-entry');
+                                        entry.setAttribute('entry', json);
+                                        //logs.append(entry);
+                                        logs.prepend(entry);
+                                });
+                        } catch (e) {
+                                console.log('split abort', e);
+                                return;
+                        }
                         // @todo: readd support for localStorage["cursor"] = fc;
                         // @todo: although not sure I like that
 
