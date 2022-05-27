@@ -621,7 +621,7 @@
                         document.getElementById("diventry").style.display = "block";
                         var entry = document.getElementById("tableentry");
 
-                        entry.replaceChildren(...Object.keys(d).map((key) => {
+                        entry.replaceChildren(...Object.keys(d).sort().map((key) => {
                                 let data = d[key];
 
                                 if (data == null)
