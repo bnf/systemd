@@ -14,6 +14,8 @@
 
 /* Variables */
 :root {
+  color-scheme: light dark;
+
   --sd-brand-black: hsl(270, 19%, 13%); /* #201A26; */
   --sd-brand-green: hsl(145, 66%, 51%); /* #30D475; */
   --sd-brand-white: #fff;
@@ -36,32 +38,16 @@
   --sd-font-weight-bold: 600;
 
   /* Light mode variables */
-  --sd-foreground-color: var(--sd-gray-extradark);
-  --sd-background-color: var(--sd-gray-extralight);
-  --sd-logo-color: var(--sd-brand-black);
-  --sd-link-color: var(--sd-green);
-  --sd-small-color: var(--sd-gray-dark);
-  --sd-highlight-bg: var(--sd-highlight-bg-light);
-  --sd-highlight-inline-bg: var(--sd-highlight-inline-bg-light);
-  --sd-link-font-weight: var(--sd-font-weight-bold);
-  --sd-table-row-bg: var(--sd-highlight-inline-bg-light);
-  --sd-table-row-hover-bg: var(--sd-gray);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --sd-foreground-color: var(--sd-gray);
-    --sd-background-color: var(--sd-black);
-    --sd-logo-color: var(--sd-brand-white);
-    --sd-link-color: var(--sd-brand-green);
-    --sd-small-color: var(--sd-gray);
-    --sd-highlight-bg: var(--sd-highlight-bg-dark);
-    --sd-highlight-inline-bg: var(--sd-highlight-inline-bg-dark);
-    --sd-link-font-weight: var(--sd-font-weight-normal);
-    --sd-table-row-bg: var(--sd-highlight-inline-bg-dark);
-    --sd-table-row-hover-bg: var(--sd-highlight-bg-dark);
-  }
+  --sd-foreground-color: light-dark(var(--sd-gray-extradark), var(--sd-gray));
+  --sd-background-color: light-dark(var(--sd-gray-extralight), var(--sd-black));
+  --sd-logo-color: light-dark(var(--sd-brand-black), var(--sd-brand-white));
+  --sd-link-color: light-dark(var(--sd-green), var(--sd-brand-green));
+  --sd-small-color: light-dark(var(--sd-gray-dark), var(--sd-gray));
+  --sd-highlight-bg: light-dark(var(--sd-highlight-bg-light), var(--sd-highlight-bg-dark));
+  --sd-highlight-inline-bg: light-dark(var(--sd-highlight-inline-bg-light), var(--sd-highlight-inline-bg-dark));
+  --sd-link-font-weight: light-dark(var(--sd-font-weight-bold), var(--sd-font-weight-normal));
+  --sd-table-row-bg: light-dark(var(--sd-highlight-inline-bg-light), var(--sd-highlight-inline-bg-dark));
+  --sd-table-row-hover-bg: light-dark(var(--sd-gray), var(--sd-highlight-bg-dark));
 }
 
 /* Typography */
@@ -187,16 +173,11 @@ th:last-child, td:last-child {
 
 /* Custom content */
 .intro-code-block {
-  background-color: var(--sd-brand-black);
+  background-color: light-dark(var(--sd-brand-black), var(--sd-highlight-bg));
   color: var(--sd-brand-white);
   font-size: 0.875rem;
   padding: 1em;
   overflow-x: auto;
-}
-@media (prefers-color-scheme: dark) {
-  .intro-code-block {
-    background-color: var(--sd-highlight-bg);
-  }
 }
 
 /* Singletons */
